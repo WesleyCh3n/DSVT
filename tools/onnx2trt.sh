@@ -23,8 +23,8 @@ echo "MIN_SHAPE: $MIN_SHAPE"
 echo "OPT_SHAPE: $OPT_SHAPE"
 echo "MAX_SHAPE: $MAX_SHAPE"
 
-docker run --rm -it --gpus all -v $PWD:/workspace nvcr.io/nvidia/tensorrt:23.08-py3 trtexec \
-  --memPoolSize=workspace:4096 --verbose --buildOnly --device=0 --fp16 \
+docker run --rm -it --gpus all -v $PWD:/workspace nvcr.io/nvidia/tensorrt:25.01-py3 trtexec \
+  --memPoolSize=workspace:4096 --verbose --device=0 --fp16 \
   --tacticSources=+CUDNN,+CUBLAS,-CUBLAS_LT,+EDGE_MASK_CONVOLUTIONS \
   --onnx=$ONNX_MODEL --saveEngine=$TRT_MODEL \
   --minShapes=$MIN_SHAPE \
