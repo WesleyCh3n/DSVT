@@ -30,9 +30,14 @@ def parse_arguments() -> argparse.Namespace:
         type=Path,
     )
     parser.add_argument("-a", "--all", action="store_true")
+    parser.add_argument("-v", "--vfe", action="store_true")
     parser.add_argument("-3", "--backbone3d", action="store_true")
+    parser.add_argument("-m", "--map2bev", action="store_true")
+    parser.add_argument("-f", "--pfe", action="store_true")
     parser.add_argument("-2", "--backbone2d", action="store_true")
     parser.add_argument("-d", "--densehead", action="store_true")
+    parser.add_argument("-p", "--pointhead", action="store_true")
+    parser.add_argument("-r", "--roithead", action="store_true")
     parser.add_argument("--skip-ckpt", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args()
 
@@ -328,6 +333,7 @@ def main():
             filename=args.ckpt, logger=logger, to_cpu=False, pre_trained_path=None
         )
     model.eval().cuda()
+
     if args.all:
         backbone_3d_2onnx(
             model.backbone_3d,
@@ -337,16 +343,83 @@ def main():
         backbone_2d_2onnx(model.backbone_2d, args.outputbase)
         dense_head_2onnx(model.dense_head, args.outputbase)
     else:
+        if args.vfe:
+            model = model.vfe
+            output_base = args.outputbase
+
+            export_path = output_base / f"{camel2snake(model.__class__.__name__)}.onnx"
+            input = {"points": torch.randn(1, 6).cuda()}
+            input_names = ["points"]
+            output_names = [
+                "points",
+                "pillar_features",
+                "voxel_features",
+                "voxel_coords",
+            ]
+            dynamic_axes = {
+                "points": {0: "batch_size"},
+                "pillar_features": {0: "batch_size"},
+                "voxel_features": {0: "batch_size"},
+                "voxel_coords": {0: "batch_size"},
+            }
+
+            torch.onnx.export(
+                model,
+                (input, {}),
+                export_path,
+                input_names=input_names,
+                output_names=output_names,
+                dynamic_axes=dynamic_axes,
+                opset_version=16,
+                # verbose=True,
+            )
         if args.backbone3d:
             backbone_3d_2onnx(
                 model.backbone_3d,
                 model.vfe,
                 args.outputbase,
             )
+        if args.map2bev:  # pointpillarscatter3d
+            model = model.map_to_bev_module
+            output_base = args.outputbase
+
+            export_path = output_base / f"{camel2snake(model.__class__.__name__)}.onnx"
+            input = {
+                "pillar_features": torch.randn(
+                    1, cfg["MODEL"].MAP_TO_BEV.NUM_BEV_FEATURES
+                ).cuda(),
+                "voxel_coords": torch.randn(1, 4).cuda(),
+            }
+            input_names = ["pillar_features", "voxel_coords"]
+            output_names = ["spatial_features"]
+            dynamic_axes = {
+                "pillar_features": {0: "batch_size"},
+                "voxel_coords": {0: "batch_size"},
+                "spatial_features": {0: "batch_size"},
+            }
+
+            torch.onnx.export(
+                model,
+                (input, {}),
+                export_path,
+                input_names=input_names,
+                output_names=output_names,
+                dynamic_axes=dynamic_axes,
+                opset_version=14,
+                # verbose=True,
+            )
+
+            pass
+        if args.pfe:
+            raise NotImplemented
         if args.backbone2d:
             backbone_2d_2onnx(model.backbone_2d, args.outputbase)
         if args.densehead:
             dense_head_2onnx(model.dense_head, args.outputbase)
+        if args.pointhead:
+            raise NotImplemented
+        if args.roithead:
+            raise NotImplemented
 
     logger.info(
         "\033[94m"
@@ -383,3 +456,5 @@ For example:
 
 if __name__ == "__main__":
     main()
+
+# polygraphy surgeon sanitize deploy_files/dynamic_pillar_vfe_3d.onnx --fold-constants -o deploy_files/dynamic_pillar_vfe_3d_fold.onnx
