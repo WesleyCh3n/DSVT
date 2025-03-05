@@ -335,7 +335,37 @@ def main():
     if args.densehead:
         dense_head_2onnx(model.dense_head, args.outputbase)
 
-    logger.info("Finished")
+    logger.info(
+        "\033[94m"
+        + """
+use `./onnx2trt.sh` to convert onnx to TensorRT engine file.
+Please adjust batch size and input dimension base on your deployed condition.
+
+For example:
+# Print usage.
+./onnx2trt.sh
+
+# 3d backbone
+./onnx2trt.sh backbone_3d.onnx backbone.engine \\
+    src:3000x192,set_voxel_inds_tensor_shift_0:2x170x36,set_voxel_inds_tensor_shift_1:2x100x36,set_voxel_masks_tensor_shift_0:2x170x36,set_voxel_masks_tensor_shift_1:2x100x36,pos_embed_tensor:4x2x3000x192 \\
+    src:20000x192,set_voxel_inds_tensor_shift_0:2x1000x36,set_voxel_inds_tensor_shift_1:2x700x36,set_voxel_masks_tensor_shift_0:2x1000x36,set_voxel_masks_tensor_shift_1:2x700x36,pos_embed_tensor:4x2x20000x192 \\
+    src:35000x192,set_voxel_inds_tensor_shift_0:2x1500x36,set_voxel_inds_tensor_shift_1:2x1200x36,set_voxel_masks_tensor_shift_0:2x1500x36,set_voxel_masks_tensor_shift_1:2x1200x36,pos_embed_tensor:4x2x35000x192 \\
+
+# 2d backbone
+./onnx2trt.sh backbone_3d.onnx backbone.engine \\
+    spatial_features_2d:1x192x192x192 \\
+    spatial_features_2d:5x192x192x192 \\
+    spatial_features_2d:10x192x192x192
+
+# dense head
+./onnx2trt.sh dense_head.onnx dense_head.engine \\
+    spatial_features_2d:1x384x468x468 \\
+    spatial_features_2d:5x384x468x468 \\
+    spatial_features_2d:10x384x468x468
+"""
+        + "\033[0m"
+    )
+    logger.info("Finished!!")
 
 
 if __name__ == "__main__":
