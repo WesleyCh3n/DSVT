@@ -593,7 +593,6 @@ class CenterHead(nn.Module):
             pred_dicts = self.generate_predicted_boxes(batch_size, pred_dicts)
 
             if self.predict_boxes_when_training:
-                print("here1")
                 rois, roi_scores, roi_labels = self.reorder_rois_for_refining(
                     data_dict["batch_size"], pred_dicts
                 )
@@ -602,8 +601,5 @@ class CenterHead(nn.Module):
                 data_dict["roi_labels"] = roi_labels
                 data_dict["has_class_labels"] = True
             else:
-                print("here2")
                 data_dict["final_box_dicts"] = pred_dicts
-                print(data_dict.keys())
-                print(len(data_dict["final_box_dicts"]))
         return data_dict

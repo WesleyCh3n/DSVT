@@ -1,4 +1,4 @@
-# !type: ignore
+# type: ignore
 import os
 import re
 import warnings
@@ -40,7 +40,13 @@ print(model)
 # model.dense_head.exporting = True
 backbone_dense_name = model.__class__.__name__
 
-input = {"spatial_features_2d": torch.randn(1, 384, 64, 64).cuda()}
+input = {
+    "spatial_features_2d": torch.randn(
+        1,
+        cfg.MODEL.BACKBONE_3D.dim_feedforward[0],
+        *cfg.MODEL.BACKBONE_3D.output_shape,
+    ).cuda()
+}
 
 camel2snake = lambda s: re.sub(r"([a-z])([A-Z])", r"\1_\2", s).lower()
 torch.onnx.export(

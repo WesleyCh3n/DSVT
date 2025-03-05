@@ -207,13 +207,11 @@ def decode_bbox_from_heatmap(
 
     assert post_center_limit_range is not None
     mask = (final_box_preds[..., :3] >= post_center_limit_range[:3]).all(2)
-    # mask &= (final_box_preds[..., :3] <= post_center_limit_range[3:]).all(2)
     mask = mask & torch.all(
         final_box_preds[..., :3] <= post_center_limit_range[3:], dim=2
     )
 
     if score_thresh is not None:
-        # mask &= final_scores > score_thresh
         mask = mask & (final_scores > score_thresh)
 
     ret_pred_dicts = []
