@@ -29,10 +29,11 @@ def parse_arguments() -> argparse.Namespace:
         default=Path("./deploy_files/"),
         type=Path,
     )
+    parser.add_argument("-a", "--all", action="store_true")
     parser.add_argument("-3", "--backbone3d", action="store_true")
     parser.add_argument("-2", "--backbone2d", action="store_true")
     parser.add_argument("-d", "--densehead", action="store_true")
-    parser.add_argument("-D", "--debug", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--skip-ckpt", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args()
 
 
@@ -217,14 +218,12 @@ def backbone_2d_2onnx(model, output_base: Path):
     )
 
 
-def backbone_3d_2onnx(model, output_base: Path):
-    batch_dict = torch.load("path to batch_dict.pth", map_location="cuda")  # TODO:
-    inputs = batch_dict
+def backbone_3d_2onnx(model, vfe, output_base: Path):
     with torch.no_grad():
         DSVT_Backbone = model
         dsvtblocks_list = DSVT_Backbone.stage_0
         layer_norms_list = DSVT_Backbone.residual_norm_stage_0
-        inputs = model.vfe(inputs)
+        inputs = vfe({"points": torch.randn(100, 6).cuda()})
         voxel_info = DSVT_Backbone.input_layer(inputs)
         set_voxel_inds_list = [
             [voxel_info[f"set_voxel_inds_stage{s}_shift{i}"] for i in range(2)]
@@ -309,7 +308,7 @@ def main():
     cfg_from_yaml_file(cfg_file, cfg)
     logger = get_logger(args.outputbase)
     args.outputbase.mkdir(parents=True, exist_ok=True)
-    if args.debug:
+    if args.skip_ckpt:
         logger.info("Enable Debug mode")
 
     test_set, _, _ = build_dataloader(
@@ -324,16 +323,30 @@ def main():
     model = build_network(
         model_cfg=cfg["MODEL"], num_class=len(cfg["CLASS_NAMES"]), dataset=test_set
     )
-    ckpt = args.ckpt
-    if not args.debug:
+    if not args.skip_ckpt:
         model.load_params_from_file(
-            filename=ckpt, logger=logger, to_cpu=False, pre_trained_path=None
+            filename=args.ckpt, logger=logger, to_cpu=False, pre_trained_path=None
         )
     model.eval().cuda()
-    if args.backbone2d:
+    if args.all:
+        backbone_3d_2onnx(
+            model.backbone_3d,
+            model.vfe,
+            args.outputbase,
+        )
         backbone_2d_2onnx(model.backbone_2d, args.outputbase)
-    if args.densehead:
         dense_head_2onnx(model.dense_head, args.outputbase)
+    else:
+        if args.backbone3d:
+            backbone_3d_2onnx(
+                model.backbone_3d,
+                model.vfe,
+                args.outputbase,
+            )
+        if args.backbone2d:
+            backbone_2d_2onnx(model.backbone_2d, args.outputbase)
+        if args.densehead:
+            dense_head_2onnx(model.dense_head, args.outputbase)
 
     logger.info(
         "\033[94m"
@@ -349,7 +362,7 @@ For example:
 ./onnx2trt.sh backbone_3d.onnx backbone.engine \\
     src:3000x192,set_voxel_inds_tensor_shift_0:2x170x36,set_voxel_inds_tensor_shift_1:2x100x36,set_voxel_masks_tensor_shift_0:2x170x36,set_voxel_masks_tensor_shift_1:2x100x36,pos_embed_tensor:4x2x3000x192 \\
     src:20000x192,set_voxel_inds_tensor_shift_0:2x1000x36,set_voxel_inds_tensor_shift_1:2x700x36,set_voxel_masks_tensor_shift_0:2x1000x36,set_voxel_masks_tensor_shift_1:2x700x36,pos_embed_tensor:4x2x20000x192 \\
-    src:35000x192,set_voxel_inds_tensor_shift_0:2x1500x36,set_voxel_inds_tensor_shift_1:2x1200x36,set_voxel_masks_tensor_shift_0:2x1500x36,set_voxel_masks_tensor_shift_1:2x1200x36,pos_embed_tensor:4x2x35000x192 \\
+    src:35000x192,set_voxel_inds_tensor_shift_0:2x1500x36,set_voxel_inds_tensor_shift_1:2x1200x36,set_voxel_masks_tensor_shift_0:2x1500x36,set_voxel_masks_tensor_shift_1:2x1200x36,pos_embed_tensor:4x2x35000x192
 
 # 2d backbone
 ./onnx2trt.sh backbone_3d.onnx backbone.engine \\
@@ -370,13 +383,3 @@ For example:
 
 if __name__ == "__main__":
     main()
-
-
-####### torch to trt engine #######
-# trtexec --onnx={path to onnx} --saveEngine={path to save trtengine} \
-# --memPoolSize=workspace:4096 --verbose --buildOnly --device=1 --fp16 \
-# --tacticSources=+CUDNN,+CUBLAS,-CUBLAS_LT,+EDGE_MASK_CONVOLUTIONS \
-# --minShapes=src:3000x192,set_voxel_inds_tensor_shift_0:2x170x36,set_voxel_inds_tensor_shift_1:2x100x36,set_voxel_masks_tensor_shift_0:2x170x36,set_voxel_masks_tensor_shift_1:2x100x36,pos_embed_tensor:4x2x3000x192 \
-# --optShapes=src:20000x192,set_voxel_inds_tensor_shift_0:2x1000x36,set_voxel_inds_tensor_shift_1:2x700x36,set_voxel_masks_tensor_shift_0:2x1000x36,set_voxel_masks_tensor_shift_1:2x700x36,pos_embed_tensor:4x2x20000x192 \
-# --maxShapes=src:35000x192,set_voxel_inds_tensor_shift_0:2x1500x36,set_voxel_inds_tensor_shift_1:2x1200x36,set_voxel_masks_tensor_shift_0:2x1500x36,set_voxel_masks_tensor_shift_1:2x1200x36,pos_embed_tensor:4x2x35000x192 \
-####### torch to trt engine #######
