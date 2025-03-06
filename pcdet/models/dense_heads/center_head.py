@@ -1,4 +1,5 @@
 import copy
+import re
 from functools import partial
 
 import numpy as np
@@ -603,3 +604,25 @@ class CenterHead(nn.Module):
             else:
                 data_dict["final_box_dicts"] = pred_dicts
         return data_dict
+
+    def export_onnx(self, inputs, output_base):
+        camel2snake = lambda s: re.sub(r"([a-z])([A-Z])", r"\1_\2", s).lower()
+        export_path = output_base / f"{camel2snake(self.__class__.__name__)}.onnx"
+        input_names = ["spatial_features_2d"]
+        output_names = ["rois", "roi_score", "roi_label"]
+        dynamic_axes = {
+            "spatial_features_2d": {0: "batch_size"},
+            "rois": {0: "batch_size"},
+            "roi_score": {0: "batch_size"},
+            "roi_label": {0: "batch_size"},
+        }
+        torch.onnx.export(
+            self,
+            (inputs, {}),
+            export_path,
+            input_names=input_names,
+            output_names=output_names,
+            dynamic_axes=dynamic_axes,
+            opset_version=14,
+            verbose=True,
+        )

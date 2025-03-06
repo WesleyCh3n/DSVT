@@ -1,3 +1,5 @@
+import re
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -60,9 +62,7 @@ def unique_with_counts_and_inverse(merge_coords):
     unq_coords = sorted_coords[unq_mask]
 
     # Compute inverse indices
-    print(f"{unq_mask=}")
     unq_inv = torch.cumsum(unq_mask.long(), dim=0) - 1
-    print(f"{unq_inv=}")
     unq_inv = torch.zeros_like(sort_indices).scatter_(0, sort_indices, unq_inv)
 
     # Count occurrences
@@ -319,7 +319,31 @@ class DynamicPillarVFE_3d(VFETemplate):
         batch_dict["pillar_features"] = batch_dict["voxel_features"] = features
         batch_dict["voxel_coords"] = voxel_coords
 
-        print(batch_dict.keys())
-        print(f"{batch_dict['pillar_features'].shape=}")
-        print(f"{batch_dict['voxel_coords'].shape=}")
         return batch_dict
+
+    def export_onnx(self, inputs, output_base):
+        camel2snake = lambda s: re.sub(r"([a-z])([A-Z])", r"\1_\2", s).lower()
+        export_path = output_base / f"{camel2snake(self.__class__.__name__)}.onnx"
+        input_names = ["points"]
+        output_names = [
+            "points",
+            "pillar_features",
+            "voxel_features",
+            "voxel_coords",
+        ]
+        dynamic_axes = {
+            "points": {0: "batch_size"},
+            "pillar_features": {0: "batch_size"},
+            "voxel_features": {0: "batch_size"},
+            "voxel_coords": {0: "batch_size"},
+        }
+        torch.onnx.export(
+            self,
+            (inputs, {}),
+            export_path,
+            input_names=input_names,
+            output_names=output_names,
+            dynamic_axes=dynamic_axes,
+            opset_version=16,
+            verbose=True,
+        )
