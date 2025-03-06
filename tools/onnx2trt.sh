@@ -27,6 +27,10 @@ docker run --rm -it --gpus all -v $PWD:/workspace nvcr.io/nvidia/tensorrt:25.01-
   --memPoolSize=workspace:4096 --verbose --device=0 --fp16 \
   --tacticSources=+CUDNN,+CUBLAS,-CUBLAS_LT,+EDGE_MASK_CONVOLUTIONS \
   --onnx=$ONNX_MODEL --saveEngine=$TRT_MODEL \
+  --profilingVerbosity=detailed \
+  --exportLayerInfo=${ONNX_MODEL%.*}.graph.json \
+  --exportTimes=${ONNX_MODEL%.*}.timing.json \
+  --exportProfile=${ONNX_MODEL%.*}.profile.json \
   --minShapes=$MIN_SHAPE \
   --optShapes=$OPT_SHAPE \
   --maxShapes=$MAX_SHAPE
